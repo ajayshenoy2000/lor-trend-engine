@@ -27,6 +27,8 @@ def enrich_trends_with_analysis(trends: list[Trend], provider: str, limit: int =
         data = parse_json_block(text)
         if not data:
             continue
+        if data.get("title"):
+            trend.title = str(data["title"])
         if data.get("summary"):
             trend.summary = str(data["summary"])
         if data.get("why_it_matters"):

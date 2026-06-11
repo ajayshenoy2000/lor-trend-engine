@@ -7,7 +7,6 @@ import httpx
 
 from backend.config import settings
 from backend.db.models import SourceItem
-from backend.sample_data import sample_sources
 
 logger = logging.getLogger(__name__)
 
@@ -19,13 +18,11 @@ def _recent_only(items: list[SourceItem], hours: int) -> list[SourceItem]:
     return [item for item in items if item.published_at >= cutoff]
 
 
-def _sample_fallback(hours: int) -> list[SourceItem]:
-    return _recent_only([item for item in sample_sources if item.source == "x"], hours)
-
-
 def collect_x_posts(keywords: list[str], hours: int = 24) -> list[SourceItem]:
     if not settings.x_bearer_token:
-        return _sample_fallback(hours)
+        # No API key configured: return nothing rather than the same canned
+        # sample posts every run (was making every search look identical).
+        return []
 
     # X recent search covers the last 7 days; clamp start_time accordingly.
     start_time = datetime.now(timezone.utc) - timedelta(hours=min(hours, 167))
@@ -72,6 +69,6 @@ def collect_x_posts(keywords: list[str], hours: int = 24) -> list[SourceItem]:
                         )
                     )
     except Exception:
-        logger.exception("X API collection failed; using sample fallback")
-        return items or _sample_fallback(hours)
-    return _recent_only(items, hours) if items else _sample_fallback(hours)
+        logger.exception("X API collection failed")
+        return items
+    return _recent_only(items, hours)

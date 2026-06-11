@@ -13,6 +13,7 @@ from backend.db.models import Trend, VideoBrief
 from backend.llm.analysis import enrich_trends_with_analysis
 from backend.llm.brief_generator import generate_riki_style_brief
 from backend.processors.cluster import cluster_by_keyword
+from backend.processors.keyword_expansion import expand_keywords
 from backend.processors.safety_filter import rejection_reasons
 from backend.processors.score import score_trend
 from backend.sample_data import sample_briefs, sample_trends
@@ -45,6 +46,27 @@ def _hours_for_window(time_window: str) -> int:
     return TIME_WINDOWS.get(time_window, 24)
 
 
+_TITLE_TEMPLATES = [
+    "{kw}って実際どうなの？医師目線で徹底解説",
+    "今話題の{kw}、知らないと損するポイント",
+    "{kw}のリスクと真実｜美容医療のプロが解説",
+    "SNSで急増中の{kw}、その裏側を解説",
+    "{kw}を検討する前に知っておきたいこと",
+]
+
+
+def _fallback_title(keyword: str, sources: list) -> str:
+    """Used when the analysis model doesn't produce a title (mock provider or
+    failed call). Picks one of several templates by keyword so different
+    trends don't all get the identical title, and prefers a real headline
+    from the collected sources when one exists."""
+    for source in sources:
+        if source.title and source.title.strip() and source.title.strip() != keyword:
+            return source.title.strip()[:60]
+    template = _TITLE_TEMPLATES[hash(keyword) % len(_TITLE_TEMPLATES)]
+    return template.format(kw=keyword)
+
+
 def collect_and_rank_trends(
     use_live_sources: bool = False,
     enabled_sources: list[str] | None = None,
@@ -63,6 +85,7 @@ def collect_and_rank_trends(
         trends = sample_trends
         _last_sources = [source for trend in trends for source in trend.sources]
     else:
+        keywords_to_use = expand_keywords(keywords_to_use, analysis_model)
         items = []
         if "x" in sources_to_use:
             items.extend(collect_x_posts(keywords_to_use, hours=hours))
@@ -83,7 +106,7 @@ def collect_and_rank_trends(
             trends.append(
                 Trend(
                     id=keyword.lower().replace(" ", "-"),
-                    title=f"SNSで話題の{keyword}、実際どうなの？",
+                    title=_fallback_title(keyword, sources),
                     keyword=keyword,
                     summary=f"直近{time_window}の{keyword}に関する投稿・ニュース・検索シグナルがまとまって伸びています。",
                     cluster_terms=sorted({source.keyword for source in sources}),
@@ -102,6 +125,8 @@ def collect_and_rank_trends(
         "analysisModelProvider": analysis_model,
         "briefModelProvider": brief_model,
         "hours": hours if use_live_sources else None,
+        "keywordsUsed": keywords_to_use,
+        "xAvailable": bool(settings.x_bearer_token),
     }
     for trend in trends:
         trend.status = _trend_status.get(trend.id, trend.status)  # type: ignore[assignment]
