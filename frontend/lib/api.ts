@@ -1,7 +1,7 @@
 import { sampleBrief, sampleSources, sampleTrends } from "./sampleData";
 import type { AppSettings, Brief, SearchNowRequest, SearchNowResponse, SourceItem, Trend } from "./types";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
+export const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
 
 async function getJson<T>(path: string, fallback: T): Promise<T> {
   try {
@@ -15,6 +15,10 @@ async function getJson<T>(path: string, fallback: T): Promise<T> {
 
 export function getTopTrends() {
   return getJson<Trend[]>("/api/top-trends", sampleTrends);
+}
+
+export function getTrendHistory() {
+  return getJson<Trend[]>("/api/trend-history", []);
 }
 
 export function getRecordThisWeek() {
@@ -84,4 +88,46 @@ export async function searchNow(payload: SearchNowRequest): Promise<SearchNowRes
     throw new Error(message || "Search failed");
   }
   return (await response.json()) as SearchNowResponse;
+}
+
+export async function generateBrief(rowId: string): Promise<Brief> {
+  const response = await fetch(`${API_BASE}/api/generate-brief`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ rowId })
+  });
+  if (!response.ok) {
+    const message = await response.text();
+    throw new Error(message || "Brief generation failed");
+  }
+  return (await response.json()) as Brief;
+}
+
+export async function deleteTrend(rowId: string): Promise<void> {
+  const response = await fetch(`${API_BASE}/api/trends/${rowId}`, { method: "DELETE" });
+  if (!response.ok) {
+    const message = await response.text();
+    throw new Error(message || "Delete failed");
+  }
+}
+
+export async function deleteBrief(briefId: string): Promise<void> {
+  const response = await fetch(`${API_BASE}/api/briefs/${briefId}`, { method: "DELETE" });
+  if (!response.ok) {
+    const message = await response.text();
+    throw new Error(message || "Delete failed");
+  }
+}
+
+export async function clearTrendHistory(olderThanHours: number): Promise<{ deletedCount: number }> {
+  const response = await fetch(`${API_BASE}/api/clear-history`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ olderThanHours })
+  });
+  if (!response.ok) {
+    const message = await response.text();
+    throw new Error(message || "Clear history failed");
+  }
+  return (await response.json()) as { deletedCount: number };
 }

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { FileText } from "lucide-react";
+import { CreateBriefButton } from "@/components/CreateBriefButton";
 import { Header } from "@/components/Header";
 import { ScoreBreakdown } from "@/components/ScoreBreakdown";
 import { SourceList } from "@/components/SourceList";
@@ -14,13 +15,17 @@ export default async function TrendDetailPage({ params }: { params: { id: string
       <div className="grid gap-5 lg:grid-cols-[0.85fr_1.15fr]">
         <aside className="space-y-4">
           <ScoreBreakdown score={trend.score} />
-          <Link
-            href={`/briefs/brief-${trend.id}`}
-            className="flex min-h-12 items-center justify-center gap-2 rounded-md bg-coral px-4 text-sm font-bold text-white shadow-soft"
-          >
-            <FileText className="h-4 w-4" />
-            Open Video Brief
-          </Link>
+          {trend.hasBrief ? (
+            <Link
+              href={`/briefs/brief-${trend.rowId ?? trend.id}`}
+              className="flex min-h-12 items-center justify-center gap-2 rounded-md bg-coral px-4 text-sm font-bold text-white shadow-soft"
+            >
+              <FileText className="h-4 w-4" />
+              View Video Brief
+            </Link>
+          ) : (
+            <CreateBriefButton rowId={trend.rowId ?? trend.id} />
+          )}
           <section className="rounded-md border border-ink/10 bg-white p-4 shadow-soft">
             <h2 className="mb-2 text-base font-bold">Why This Matters</h2>
             <p className="text-sm leading-6 text-ink/70">{trend.whyItMatters}</p>

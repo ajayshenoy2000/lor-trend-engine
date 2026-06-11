@@ -1,10 +1,59 @@
+"use client";
+
+import { useState } from "react";
 import Link from "next/link";
-import { ArrowRight, CheckCircle2, ShieldAlert } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { ArrowRight, CheckCircle2, FileText, Loader2, ShieldAlert, Trash2 } from "lucide-react";
+import { deleteTrend, generateBrief } from "@/lib/api";
 import type { Trend } from "@/lib/types";
 
 export function TrendCard({ trend, rank }: { trend: Trend; rank?: number }) {
+  const router = useRouter();
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const rowId = trend.rowId ?? trend.id;
+  const briefId = `brief-${rowId}`;
+
+  async function handleCreateBrief(event: React.MouseEvent) {
+    event.preventDefault();
+    event.stopPropagation();
+    setIsGenerating(true);
+    setError(null);
+    try {
+      await generateBrief(rowId);
+      router.push(`/briefs/${briefId}`);
+      router.refresh();
+    } catch (genError) {
+      setError(genError instanceof Error ? genError.message : "Brief generation failed");
+    } finally {
+      setIsGenerating(false);
+    }
+  }
+
+  async function handleDelete(event: React.MouseEvent) {
+    event.preventDefault();
+    event.stopPropagation();
+    if (!confirm("Delete this trend? This cannot be undone.")) return;
+    setIsDeleting(true);
+    setError(null);
+    try {
+      await deleteTrend(rowId);
+      router.refresh();
+    } catch (deleteError) {
+      setError(deleteError instanceof Error ? deleteError.message : "Delete failed");
+      setIsDeleting(false);
+    }
+  }
+
+  if (isDeleting) return null;
+
   return (
-    <Link href={`/trends/${trend.id}`} className="block rounded-md border border-ink/10 bg-white p-4 shadow-soft transition hover:-translate-y-0.5 hover:border-sage/50">
+    <Link
+      href={`/trends/${rowId}`}
+      className="block rounded-md border border-ink/10 bg-white p-4 shadow-soft transition hover:-translate-y-0.5 hover:border-sage/50"
+    >
       <div className="mb-3 flex items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="mb-2 flex flex-wrap items-center gap-2">
@@ -26,6 +75,39 @@ export function TrendCard({ trend, rank }: { trend: Trend; rank?: number }) {
           </span>
         ))}
       </div>
+
+      <div className="mb-3 flex flex-wrap items-center gap-2">
+        {trend.hasBrief ? (
+          <Link
+            href={`/briefs/${briefId}`}
+            onClick={(event) => event.stopPropagation()}
+            className="flex min-h-9 items-center gap-2 rounded-md bg-ink px-3 text-xs font-bold text-white"
+          >
+            <FileText className="h-3.5 w-3.5" />
+            View Brief
+          </Link>
+        ) : (
+          <button
+            type="button"
+            onClick={handleCreateBrief}
+            disabled={isGenerating}
+            className="flex min-h-9 items-center gap-2 rounded-md bg-coral px-3 text-xs font-bold text-white disabled:cursor-not-allowed disabled:bg-ink/25"
+          >
+            {isGenerating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileText className="h-3.5 w-3.5" />}
+            {isGenerating ? "Generating..." : "Create Brief"}
+          </button>
+        )}
+        <button
+          type="button"
+          onClick={handleDelete}
+          className="flex min-h-9 items-center gap-2 rounded-md border border-coral/30 px-3 text-xs font-bold text-coral hover:bg-coral/10"
+        >
+          <Trash2 className="h-3.5 w-3.5" />
+          Delete
+        </button>
+      </div>
+      {error ? <p className="mb-2 text-xs font-semibold text-coral">{error}</p> : null}
+
       <div className="flex items-center justify-between text-sm font-semibold text-sage">
         <span className="flex items-center gap-2">
           {trend.safetyNotes.length ? <ShieldAlert className="h-4 w-4" /> : <CheckCircle2 className="h-4 w-4" />}

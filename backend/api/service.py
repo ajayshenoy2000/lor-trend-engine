@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from backend.collectors.google_news import collect_google_news
@@ -7,9 +8,8 @@ from backend.collectors.google_trends import collect_google_trends
 from backend.collectors.x import collect_x_posts
 from backend.collectors.youtube import collect_youtube_history
 from backend.config import DEFAULT_KEYWORDS, settings
-
-_user_keywords: list[str] | None = None
 from backend.db.models import Trend, VideoBrief
+from backend.db.supabase_client import get_client
 from backend.llm.analysis import enrich_trends_with_analysis
 from backend.llm.brief_generator import generate_riki_style_brief
 from backend.processors.cluster import cluster_by_keyword
@@ -18,6 +18,7 @@ from backend.processors.safety_filter import rejection_reasons
 from backend.processors.score import score_trend
 from backend.sample_data import sample_briefs, sample_trends
 
+_user_keywords: list[str] | None = None
 
 TIME_WINDOWS = {
     "12h": 12,
@@ -28,9 +29,13 @@ TIME_WINDOWS = {
 }
 DEFAULT_SOURCES = ["x", "google_news", "google_trends", "youtube"]
 
-_trend_status: dict[str, str] = {}
+# In-memory fallback state, used only when Supabase isn't configured
+# (local dev without SUPABASE_URL/SUPABASE_SERVICE_KEY set).
 _briefs: dict[str, VideoBrief] = {brief.id: brief for brief in sample_briefs}
-_last_trends: list[Trend] | None = None
+_memory_trends: list[Trend] = []
+for _trend in sample_trends:
+    _trend.row_id = _trend.id
+    _memory_trends.append(_trend)
 _last_sources = [source for trend in sample_trends for source in trend.sources]
 _last_search_meta: dict[str, Any] = {
     "mode": "sample",
@@ -74,7 +79,7 @@ def collect_and_rank_trends(
     analysis_model_provider: str | None = None,
     brief_model_provider: str | None = None,
 ) -> list[Trend]:
-    global _last_sources, _last_search_meta
+    global _last_sources, _last_search_meta, _memory_trends
     sources_to_use = enabled_sources or DEFAULT_SOURCES
     analysis_model = analysis_model_provider or settings.analysis_model_provider
     brief_model = brief_model_provider or settings.brief_model_provider
@@ -82,7 +87,7 @@ def collect_and_rank_trends(
     keywords_to_use = _user_keywords or DEFAULT_KEYWORDS
 
     if not use_live_sources:
-        trends = sample_trends
+        trends = list(sample_trends)
         _last_sources = [source for trend in trends for source in trend.sources]
     else:
         keywords_to_use = expand_keywords(keywords_to_use, analysis_model)
@@ -128,14 +133,67 @@ def collect_and_rank_trends(
         "keywordsUsed": keywords_to_use,
         "xAvailable": bool(settings.x_bearer_token),
     }
-    for trend in trends:
-        trend.status = _trend_status.get(trend.id, trend.status)  # type: ignore[assignment]
     ranked = sorted(trends, key=lambda trend: trend.score.total, reverse=True)
     if use_live_sources:
-        # Analysis model rewrites summary / why_it_matters for the top trends;
-        # the template text above is kept when the provider is mock/unavailable.
+        # Analysis model rewrites title / summary / why_it_matters for the
+        # top trends; the template text above is kept when the provider is
+        # mock/unavailable.
         enrich_trends_with_analysis(ranked, analysis_model)
+
+    if not use_live_sources:
+        for trend in ranked:
+            trend.row_id = trend.id
+        _memory_trends = ranked
+    else:
+        _persist_search(ranked)
+
     return ranked
+
+
+def _persist_search(ranked: list[Trend]) -> None:
+    """Save a freshly-ranked search as a new batch. With Supabase configured,
+    every trend row is kept forever (Trend History); without it, falls back
+    to replacing the in-memory "current" list for local dev."""
+    client = get_client()
+    if not client:
+        for trend in ranked:
+            trend.row_id = trend.id
+        global _memory_trends
+        _memory_trends = ranked
+        return
+
+    batch = client.table("search_batches").insert({"meta": _last_search_meta}).execute()
+    batch_id = batch.data[0]["id"]
+    if not ranked:
+        return
+    rows = [
+        {
+            "trend_id": trend.id,
+            "batch_id": batch_id,
+            "status": trend.status,
+            "payload": trend.as_dict(),
+        }
+        for trend in ranked
+    ]
+    inserted = client.table("trends").insert(rows).execute()
+    for trend, row in zip(ranked, inserted.data):
+        trend.row_id = row["row_id"]
+        trend.created_at = row["created_at"]
+
+
+def _latest_batch_id(client) -> str | None:
+    result = client.table("search_batches").select("id").order("created_at", desc=True).limit(1).execute()
+    return result.data[0]["id"] if result.data else None
+
+
+def _attach_brief_flags(client, trends: list[Trend]) -> None:
+    row_ids = [trend.row_id for trend in trends if trend.row_id]
+    if not row_ids:
+        return
+    rows = client.table("briefs").select("trend_row_id").in_("trend_row_id", row_ids).execute()
+    have_brief = {row["trend_row_id"] for row in rows.data}
+    for trend in trends:
+        trend.has_brief = trend.row_id in have_brief
 
 
 def run_on_demand_search(
@@ -144,8 +202,7 @@ def run_on_demand_search(
     analysis_model_provider: str,
     brief_model_provider: str,
 ) -> dict[str, Any]:
-    global _last_trends
-    _last_trends = collect_and_rank_trends(
+    ranked = collect_and_rank_trends(
         use_live_sources=True,
         enabled_sources=enabled_sources,
         time_window=time_window,
@@ -153,15 +210,41 @@ def run_on_demand_search(
         brief_model_provider=brief_model_provider,
     )
     return {
-        "trends": [trend.as_dict() for trend in _last_trends],
+        "trends": [trend.as_dict() for trend in ranked],
         "recordThisWeek": [trend.as_dict() for trend in get_record_this_week()],
         "meta": _last_search_meta,
     }
 
 
 def get_top_trends(limit: int = 20) -> list[Trend]:
-    trends = _last_trends if _last_trends is not None else collect_and_rank_trends()
-    return trends[:limit]
+    """Trends from the most recent search batch only — the Home tab."""
+    client = get_client()
+    if client:
+        batch_id = _latest_batch_id(client)
+        if not batch_id:
+            return []
+        rows = client.table("trends").select("*").eq("batch_id", batch_id).execute()
+        trends = [Trend.from_dict(row["payload"] | {"rowId": row["row_id"], "createdAt": row["created_at"], "status": row["status"]}) for row in rows.data]
+        _attach_brief_flags(client, trends)
+        return sorted(trends, key=lambda trend: trend.score.total, reverse=True)[:limit]
+
+    trends = _memory_trends if _memory_trends else collect_and_rank_trends()
+    return sorted(trends, key=lambda trend: trend.score.total, reverse=True)[:limit]
+
+
+def get_trend_history(limit: int = 100) -> list[Trend]:
+    """All trends from earlier search batches — the Trend History tab."""
+    client = get_client()
+    if not client:
+        return []
+    batch_id = _latest_batch_id(client)
+    query = client.table("trends").select("*").order("created_at", desc=True).limit(limit)
+    if batch_id:
+        query = query.neq("batch_id", batch_id)
+    rows = query.execute()
+    trends = [Trend.from_dict(row["payload"] | {"rowId": row["row_id"], "createdAt": row["created_at"], "status": row["status"]}) for row in rows.data]
+    _attach_brief_flags(client, trends)
+    return trends
 
 
 def get_record_this_week(limit: int = 5) -> list[Trend]:
@@ -180,32 +263,109 @@ def get_video_opportunities(limit: int = 10) -> list[Trend]:
     ][:limit]
 
 
-def get_trend(trend_id: str) -> Trend | None:
-    return next((trend for trend in get_top_trends() if trend.id == trend_id), None)
+def get_trend(row_id: str) -> Trend | None:
+    client = get_client()
+    if client:
+        row = client.table("trends").select("*").eq("row_id", row_id).limit(1).execute()
+        if not row.data:
+            return None
+        trend = Trend.from_dict(row.data[0]["payload"] | {"rowId": row.data[0]["row_id"], "createdAt": row.data[0]["created_at"], "status": row.data[0]["status"]})
+        _attach_brief_flags(client, [trend])
+        return trend
+
+    return next((trend for trend in _memory_trends if trend.row_id == row_id or trend.id == row_id), None)
 
 
 def get_brief(brief_id: str) -> VideoBrief | None:
+    client = get_client()
+    if client:
+        row = client.table("briefs").select("*").eq("id", brief_id).limit(1).execute()
+        if row.data:
+            return VideoBrief.from_dict(row.data[0]["payload"])
+        row_id = brief_id.removeprefix("brief-")
+        return generate_brief_for_trend(row_id)
+
     if brief_id in _briefs:
         return _briefs[brief_id]
-    trend_id = brief_id.removeprefix("brief-")
-    trend = get_trend(trend_id)
+    row_id = brief_id.removeprefix("brief-")
+    return generate_brief_for_trend(row_id)
+
+
+def generate_brief_for_trend(row_id: str) -> VideoBrief | None:
+    """Generate (or return the existing) brief for a trend row. Briefs are
+    only created when this is called explicitly — never automatically."""
+    brief_id = f"brief-{row_id}"
+    client = get_client()
+
+    if client:
+        existing = client.table("briefs").select("*").eq("id", brief_id).limit(1).execute()
+        if existing.data:
+            return VideoBrief.from_dict(existing.data[0]["payload"])
+    elif brief_id in _briefs:
+        return _briefs[brief_id]
+
+    trend = get_trend(row_id)
     if not trend:
         return None
+
     brief = generate_riki_style_brief(trend, provider=_brief_provider())
-    _briefs[brief.id] = brief
+    brief.id = brief_id
+    brief.trend_id = trend.id
+
+    if client:
+        client.table("briefs").insert(
+            {
+                "id": brief_id,
+                "trend_row_id": row_id,
+                "trend_id": trend.id,
+                "payload": brief.as_dict(),
+            }
+        ).execute()
+    else:
+        _briefs[brief_id] = brief
     return brief
 
 
-def generate_brief_for_trend(trend_id: str) -> VideoBrief | None:
-    cached = _briefs.get(f"brief-{trend_id}")
-    if cached:
-        return cached
-    trend = get_trend(trend_id)
-    if not trend:
-        return None
-    brief = generate_riki_style_brief(trend, provider=_brief_provider())
-    _briefs[brief.id] = brief
-    return brief
+def get_briefs() -> list[VideoBrief]:
+    client = get_client()
+    if client:
+        rows = client.table("briefs").select("*").order("created_at", desc=True).execute()
+        return [VideoBrief.from_dict(row["payload"]) for row in rows.data]
+    return list(_briefs.values())
+
+
+def delete_trend(row_id: str) -> bool:
+    client = get_client()
+    if client:
+        client.table("trends").delete().eq("row_id", row_id).execute()
+        return True
+    global _memory_trends
+    before = len(_memory_trends)
+    _memory_trends = [trend for trend in _memory_trends if trend.row_id != row_id]
+    return len(_memory_trends) < before
+
+
+def delete_brief(brief_id: str) -> bool:
+    client = get_client()
+    if client:
+        client.table("briefs").delete().eq("id", brief_id).execute()
+        return True
+    return _briefs.pop(brief_id, None) is not None
+
+
+def clear_trend_history(older_than_hours: int) -> int:
+    """Delete trend rows older than the given window, excluding the current
+    (latest) batch so Home never empties out. Briefs are never touched."""
+    client = get_client()
+    if not client:
+        return 0
+    cutoff = (datetime.now(timezone.utc) - timedelta(hours=older_than_hours)).isoformat()
+    batch_id = _latest_batch_id(client)
+    query = client.table("trends").delete().lt("created_at", cutoff)
+    if batch_id:
+        query = query.neq("batch_id", batch_id)
+    result = query.execute()
+    return len(result.data)
 
 
 def _brief_provider() -> str:
@@ -220,12 +380,14 @@ def get_search_meta() -> dict[str, Any]:
     return _last_search_meta
 
 
-def set_topic_status(trend_id: str, status: str) -> Trend | None:
-    trend = get_trend(trend_id)
+def set_topic_status(row_id: str, status: str) -> Trend | None:
+    trend = get_trend(row_id)
     if not trend:
         return None
-    _trend_status[trend_id] = status
     trend.status = status  # type: ignore[assignment]
+    client = get_client()
+    if client:
+        client.table("trends").update({"status": status, "payload": trend.as_dict()}).eq("row_id", row_id).execute()
     return trend
 
 

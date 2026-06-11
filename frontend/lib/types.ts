@@ -38,6 +38,9 @@ export type Score = {
 
 export type Trend = {
   id: string;
+  rowId: string | null;
+  createdAt: string | null;
+  hasBrief: boolean;
   title: string;
   keyword: string;
   summary: string;
@@ -84,6 +87,8 @@ export type SearchNowResponse = {
     analysisModelProvider: string;
     briefModelProvider: string;
     hours?: number;
+    keywordsUsed?: string[];
+    xAvailable?: boolean;
   };
 };
 

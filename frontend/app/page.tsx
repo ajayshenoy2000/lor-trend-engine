@@ -38,7 +38,7 @@ export default async function HomePage() {
             <h2 className="text-xl font-bold">Today&apos;s Top Trends</h2>
             <span className="text-sm font-semibold text-ink/50">Top 20</span>
           </div>
-          <div className="space-y-3">
+          <div className="stagger-list space-y-3">
             {trends.map((trend, index) => (
               <TrendCard key={trend.id} trend={trend} rank={index + 1} />
             ))}
@@ -50,7 +50,7 @@ export default async function HomePage() {
             <h2 className="text-xl font-bold">Record This Week</h2>
             <span className="text-sm font-semibold text-ink/50">Top 5</span>
           </div>
-          <div className="space-y-3">
+          <div className="stagger-list space-y-3">
             {recordTopics.map((trend, index) => (
               <TrendCard key={trend.id} trend={trend} rank={index + 1} />
             ))}

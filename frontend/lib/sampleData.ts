@@ -3,6 +3,9 @@ import type { Brief, SourceItem, Trend } from "./types";
 export const sampleTrends: Trend[] = [
   {
     id: "glp1-mounjaro-safety",
+    rowId: "glp1-mounjaro-safety",
+    createdAt: null,
+    hasBrief: true,
     title: "SNSで話題のマンジャロダイエット、実際どうなの？",
     keyword: "マンジャロ",
     summary: "GLP-1系の痩身目的利用が伸び、効果よりも副作用や適応への不安が増えています。",
@@ -16,6 +19,9 @@ export const sampleTrends: Trend[] = [
   },
   {
     id: "kuma-downtime-anxiety",
+    rowId: "kuma-downtime-anxiety",
+    createdAt: null,
+    hasBrief: false,
     title: "クマ取り後のダウンタイム、不安になりすぎなくて大丈夫？",
     keyword: "クマ取り",
     summary: "クマ取り後の腫れ・内出血・左右差について、術前不安と術後不安の検索が増えています。",
@@ -29,6 +35,9 @@ export const sampleTrends: Trend[] = [
   },
   {
     id: "tear-bag-filler-natural",
+    rowId: "tear-bag-filler-natural",
+    createdAt: null,
+    hasBrief: false,
     title: "SNSで人気の涙袋ヒアルロン酸、自然に見せるには？",
     keyword: "涙袋",
     summary: "韓国アイドル顔の文脈で涙袋注入が拡散し、入れすぎや不自然さへの疑問が出ています。",

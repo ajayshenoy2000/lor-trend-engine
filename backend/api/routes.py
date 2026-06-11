@@ -10,7 +10,11 @@ router = APIRouter(prefix="/api")
 
 
 class BriefRequest(BaseModel):
-    trendId: str
+    rowId: str
+
+
+class ClearHistoryRequest(BaseModel):
+    olderThanHours: int
 
 
 class SearchNowRequest(BaseModel):
@@ -40,18 +44,34 @@ def video_opportunities() -> list[dict]:
     return [trend.as_dict() for trend in service.get_video_opportunities()]
 
 
-@router.get("/trends/{trend_id}")
-def trend_detail(trend_id: str) -> dict:
-    trend = service.get_trend(trend_id)
+@router.get("/trend-history")
+def trend_history() -> list[dict]:
+    return [trend.as_dict() for trend in service.get_trend_history()]
+
+
+@router.get("/trends/{row_id}")
+def trend_detail(row_id: str) -> dict:
+    trend = service.get_trend(row_id)
     if not trend:
         raise HTTPException(status_code=404, detail="Trend not found")
     return trend.as_dict()
 
 
+@router.delete("/trends/{row_id}")
+def delete_trend(row_id: str) -> dict:
+    service.delete_trend(row_id)
+    return {"deleted": row_id}
+
+
+@router.post("/clear-history")
+def clear_history(payload: ClearHistoryRequest) -> dict:
+    deleted = service.clear_trend_history(payload.olderThanHours)
+    return {"deletedCount": deleted}
+
+
 @router.get("/briefs")
 def briefs() -> list[dict]:
-    generated = (service.generate_brief_for_trend(trend.id) for trend in service.get_record_this_week())
-    return [brief.as_dict() for brief in generated if brief]
+    return [brief.as_dict() for brief in service.get_briefs()]
 
 
 @router.get("/briefs/{brief_id}")
@@ -62,9 +82,15 @@ def brief_detail(brief_id: str) -> dict:
     return brief.as_dict()
 
 
+@router.delete("/briefs/{brief_id}")
+def delete_brief(brief_id: str) -> dict:
+    service.delete_brief(brief_id)
+    return {"deleted": brief_id}
+
+
 @router.post("/generate-brief")
 def generate_brief(payload: BriefRequest) -> dict:
-    brief = service.generate_brief_for_trend(payload.trendId)
+    brief = service.generate_brief_for_trend(payload.rowId)
     if not brief:
         raise HTTPException(status_code=404, detail="Trend not found")
     return brief.as_dict()
@@ -90,17 +116,17 @@ def search_now(payload: SearchNowRequest) -> dict:
     )
 
 
-@router.post("/approve-topic/{trend_id}")
-def approve_topic(trend_id: str) -> dict:
-    trend = service.set_topic_status(trend_id, "approved")
+@router.post("/approve-topic/{row_id}")
+def approve_topic(row_id: str) -> dict:
+    trend = service.set_topic_status(row_id, "approved")
     if not trend:
         raise HTTPException(status_code=404, detail="Trend not found")
     return trend.as_dict()
 
 
-@router.post("/reject-topic/{trend_id}")
-def reject_topic(trend_id: str) -> dict:
-    trend = service.set_topic_status(trend_id, "rejected")
+@router.post("/reject-topic/{row_id}")
+def reject_topic(row_id: str) -> dict:
+    trend = service.set_topic_status(row_id, "rejected")
     if not trend:
         raise HTTPException(status_code=404, detail="Trend not found")
     return trend.as_dict()

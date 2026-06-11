@@ -14,9 +14,14 @@ app = FastAPI(
     version="0.1.0",
 )
 
+_allowed_origins = {"http://localhost:3000", "http://127.0.0.1:3000"}
+if settings.cors_origin:
+    _allowed_origins.add(settings.cors_origin)
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origin_regex=r"https?://(localhost|127\.0\.0\.1)(:\d+)?",
+    allow_origins=list(_allowed_origins),
+    allow_origin_regex=r"https?://(localhost|127\.0\.0\.1)(:\d+)?|https://.*\.vercel\.app",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

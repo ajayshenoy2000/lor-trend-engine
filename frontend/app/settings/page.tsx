@@ -5,6 +5,7 @@ import { Header } from "@/components/Header";
 import { useEffect } from "react";
 import { X } from "lucide-react";
 import { API_BASE } from "@/lib/api-config";
+import { clearTrendHistory } from "@/lib/api";
 
 interface Settings {
   keywords: string[];
@@ -24,6 +25,10 @@ export default function SettingsPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+  const [clearHours, setClearHours] = useState(168);
+  const [clearing, setClearing] = useState(false);
+  const [clearMessage, setClearMessage] = useState<string | null>(null);
+  const [clearError, setClearError] = useState<string | null>(null);
 
   useEffect(() => {
     fetch(`${API_BASE}/api/settings`, { cache: "no-store" })
@@ -67,6 +72,21 @@ export default function SettingsPage() {
       setError(err instanceof Error ? err.message : "Error saving keywords");
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleClearHistory = async () => {
+    if (!confirm(`Delete trend history older than the selected interval? Briefs are never deleted.`)) return;
+    setClearing(true);
+    setClearError(null);
+    setClearMessage(null);
+    try {
+      const result = await clearTrendHistory(clearHours);
+      setClearMessage(`Removed ${result.deletedCount} old trend${result.deletedCount === 1 ? "" : "s"} from history.`);
+    } catch (err) {
+      setClearError(err instanceof Error ? err.message : "Failed to clear history");
+    } finally {
+      setClearing(false);
     }
   };
 
@@ -133,6 +153,36 @@ export default function SettingsPage() {
           >
             {saving ? "Saving..." : "Save Keywords"}
           </button>
+        </section>
+        <section className="rounded-md border border-ink/10 bg-white p-4 shadow-soft lg:col-span-2">
+          <h2 className="mb-1 text-xl font-bold">Clear Trend History</h2>
+          <p className="mb-4 text-sm text-ink/60">
+            Permanently delete trend history entries older than the selected interval. The most recent search results
+            (Home tab) and ALL briefs are never deleted.
+          </p>
+          <div className="flex flex-col gap-3 sm:flex-row">
+            <select
+              value={clearHours}
+              onChange={(e) => setClearHours(Number(e.target.value))}
+              className="min-h-11 flex-1 rounded-md border border-ink/10 bg-mist px-3 text-sm outline-none focus:border-sage"
+            >
+              <option value={24}>Older than 1 day</option>
+              <option value={72}>Older than 3 days</option>
+              <option value={168}>Older than 7 days</option>
+              <option value={336}>Older than 14 days</option>
+              <option value={720}>Older than 30 days</option>
+              <option value={2160}>Older than 90 days</option>
+            </select>
+            <button
+              onClick={handleClearHistory}
+              disabled={clearing}
+              className="min-h-11 rounded-md bg-coral px-4 text-sm font-bold text-white disabled:cursor-not-allowed disabled:bg-ink/25"
+            >
+              {clearing ? "Clearing..." : "Clear History"}
+            </button>
+          </div>
+          {clearError && <p className="mt-3 text-sm text-coral">{clearError}</p>}
+          {clearMessage && <p className="mt-3 text-sm font-bold text-sage">{clearMessage}</p>}
         </section>
       </div>
     </div>
