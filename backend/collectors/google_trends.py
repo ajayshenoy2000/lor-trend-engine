@@ -17,15 +17,26 @@ def _trends_timeframe(hours: int) -> str:
     return "today 1-m"
 
 
-def collect_google_trends(keywords: list[str], hours: int = 24) -> list[SourceItem]:
+def collect_google_trends(keywords: list[str], hours: int = 24, region_code: str = "JP") -> list[SourceItem]:
     try:
         from pytrends.request import TrendReq
     except Exception:
         return [item for item in sample_sources if item.source == "google_trends"]
 
+    # Map region code to language and timezone
+    locale_map = {
+        "JP": ("ja-JP", 540),
+        "US": ("en-US", -300),
+        "GB": ("en-GB", 0),
+        "IN": ("en-IN", 330),
+        "DE": ("de-DE", 60),
+        "FR": ("fr-FR", 60),
+    }
+    hl, tz = locale_map.get(region_code, ("en-US", -300))
+
     try:
-        pytrends = TrendReq(hl="ja-JP", tz=540)
-        pytrends.build_payload(keywords[:5], timeframe=_trends_timeframe(hours), geo="JP")
+        pytrends = TrendReq(hl=hl, tz=tz)
+        pytrends.build_payload(keywords[:5], timeframe=_trends_timeframe(hours), geo=region_code)
         related = pytrends.related_queries()
     except Exception:
         return [item for item in sample_sources if item.source == "google_trends"]

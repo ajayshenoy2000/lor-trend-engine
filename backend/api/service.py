@@ -12,6 +12,7 @@ from backend.db.models import Trend, VideoBrief
 from backend.db.supabase_client import get_client
 from backend.llm.analysis import enrich_trends_with_analysis
 from backend.llm.brief_generator import generate_riki_style_brief
+from backend.processors.channel_profile import compute_channel_baseline
 from backend.processors.cluster import cluster_by_keyword
 from backend.processors.keyword_expansion import expand_keywords
 from backend.processors.safety_filter import rejection_reasons
@@ -19,6 +20,8 @@ from backend.processors.score import score_trend
 from backend.sample_data import sample_briefs, sample_trends
 
 _user_keywords: list[str] | None = None
+_custom_keywords: list[str] | None = None
+_use_custom_keywords_only: bool = False
 
 TIME_WINDOWS = {
     "12h": 12,
@@ -26,8 +29,14 @@ TIME_WINDOWS = {
     "3d": 72,
     "7d": 168,
     "30d": 720,
+    "60d": 1440,
+    "90d": 2160,
 }
 DEFAULT_SOURCES = ["x", "google_news", "google_trends", "youtube"]
+
+# Channel baseline (computed when user sets YOUTUBE_CHANNEL_ID)
+_channel_baseline: dict | None = None
+_current_region_code: str = "JP"
 
 # In-memory fallback state, used only when Supabase isn't configured
 # (local dev without SUPABASE_URL/SUPABASE_SERVICE_KEY set).
@@ -313,14 +322,25 @@ def generate_brief_for_trend(row_id: str) -> VideoBrief | None:
     brief.trend_id = trend.id
 
     if client:
-        client.table("briefs").insert(
-            {
-                "id": brief_id,
-                "trend_row_id": row_id,
-                "trend_id": trend.id,
-                "payload": brief.as_dict(),
-            }
-        ).execute()
+        try:
+            result = client.table("briefs").insert(
+                {
+                    "id": brief_id,
+                    "trend_row_id": row_id,
+                    "trend_id": trend.id,
+                    "payload": brief.as_dict(),
+                }
+            ).execute()
+            if not result.data:
+                raise Exception("Brief insert returned no data")
+            # Also update the trend's has_brief flag
+            trend.has_brief = True
+            client.table("trends").update({"payload": trend.as_dict()}).eq("row_id", row_id).execute()
+        except Exception as e:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Failed to save brief {brief_id}: {e}")
+            raise
     else:
         _briefs[brief_id] = brief
     return brief

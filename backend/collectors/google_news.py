@@ -61,14 +61,37 @@ def _fetch_rss(url: str, keyword: str, id_prefix: str, engagement: int, limit: i
     return items
 
 
-def collect_google_news(keywords: list[str], limit_per_keyword: int = 5, hours: int = 24) -> list[SourceItem]:
+def _region_to_locale(region_code: str = "JP") -> tuple[str, str, str]:
+    """Map region_code to (hl for Google, ceid for Google, setlang for Bing)."""
+    mapping = {
+        "JP": ("ja", "JP:ja", "ja-JP"),
+        "US": ("en", "US:en", "en-US"),
+        "GB": ("en", "GB:en", "en-GB"),
+        "IN": ("en", "IN:en", "en-IN"),
+        "DE": ("de", "DE:de", "de-DE"),
+        "FR": ("fr", "FR:fr", "fr-FR"),
+    }
+    hl, ceid, setlang = mapping.get(region_code, ("en", "US:en", "en-US"))
+    return hl, ceid, setlang
+
+
+def collect_google_news(
+    keywords: list[str],
+    limit_per_keyword: int = 5,
+    hours: int = 24,
+    region_code: str = "JP",
+) -> list[SourceItem]:
     items: list[SourceItem] = []
     when = _google_news_when(hours)
+    hl, ceid, setlang = _region_to_locale(region_code)
+    gl = region_code
+    cc = region_code
+
     for keyword in keywords:
-        gnews_url = f"https://news.google.com/rss/search?q={quote(f'{keyword} when:{when}')}&hl=ja&gl=JP&ceid=JP:ja"
+        gnews_url = f"https://news.google.com/rss/search?q={quote(f'{keyword} when:{when}')}&hl={hl}&gl={gl}&ceid={ceid}"
         items.extend(_fetch_rss(gnews_url, keyword, "google_news", 25, limit_per_keyword))
 
-        bing_url = f"https://www.bing.com/news/search?q={quote(keyword)}&format=RSS&setlang=ja-JP&cc=JP"
+        bing_url = f"https://www.bing.com/news/search?q={quote(keyword)}&format=RSS&setlang={setlang}&cc={cc}"
         items.extend(_fetch_rss(bing_url, keyword, "bing_news", 20, limit_per_keyword))
     recent_items = _recent_only(items, hours)
     fallback = _recent_only([item for item in sample_sources if item.source == "google_news"], hours)

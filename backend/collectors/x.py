@@ -18,7 +18,7 @@ def _recent_only(items: list[SourceItem], hours: int) -> list[SourceItem]:
     return [item for item in items if item.published_at >= cutoff]
 
 
-def collect_x_posts(keywords: list[str], hours: int = 24) -> list[SourceItem]:
+def collect_x_posts(keywords: list[str], hours: int = 24, region_code: str = "JP") -> list[SourceItem]:
     if not settings.x_bearer_token:
         # No API key configured: return nothing rather than the same canned
         # sample posts every run (was making every search look identical).
