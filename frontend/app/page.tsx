@@ -11,10 +11,7 @@ export default async function HomePage() {
 
   return (
     <div>
-      <Header
-        title="Trend Intelligence"
-        subtitle="美容医療・ダイエット領域の話題を、りき先生が3-5分で話せるYouTube企画に変換します。"
-      />
+      <Header title="Trend Intelligence" subtitle="" />
 
       <section className="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Stat icon={TrendingUp} label="Top Trends" value={trends.length.toString()} />
