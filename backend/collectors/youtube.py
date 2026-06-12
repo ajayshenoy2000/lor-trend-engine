@@ -5,7 +5,6 @@ from urllib.parse import urlencode
 import isodate
 import urllib.request
 import json
-import time
 
 from backend.config import settings
 from backend.db.models import YouTubeVideo
@@ -14,11 +13,6 @@ from backend.sample_data import sample_youtube
 
 
 YOUTUBE_API_BASE = "https://www.googleapis.com/youtube/v3"
-
-# Cache the channel's full upload history in-process so repeated Search Now
-# calls don't re-fetch ~everything from YouTube every time.
-_CHANNEL_CACHE_TTL_SECONDS = 60 * 30
-_channel_cache: dict[str, tuple[float, list[YouTubeVideo]]] = {}
 
 
 def _recent_only(videos: list[YouTubeVideo], hours: int | None) -> list[YouTubeVideo]:
@@ -82,124 +76,62 @@ def _videos_from_ids(video_ids: list[str]) -> list[YouTubeVideo]:
     return videos
 
 
-def _fetch_channel_uploads(channel_id: str) -> list[YouTubeVideo]:
-    """Fetch the channel's full upload history (up to 200 most recent videos)."""
-    channels_payload = _youtube_get("channels", {"part": "contentDetails", "id": channel_id})
-    items = channels_payload.get("items", [])
-    if not items:
-        return []
-    uploads_playlist_id = items[0].get("contentDetails", {}).get("relatedPlaylists", {}).get("uploads")
-    if not uploads_playlist_id:
-        return []
-
-    video_ids: list[str] = []
-    page_token: str | None = None
-    for _ in range(4):  # up to 4 pages * 50 = 200 videos
-        playlist_payload = _youtube_get(
-            "playlistItems",
-            {
-                "part": "contentDetails",
-                "playlistId": uploads_playlist_id,
-                "maxResults": 50,
-                "pageToken": page_token,
-            },
-        )
-        for item in playlist_payload.get("items", []):
-            video_id = item.get("contentDetails", {}).get("videoId")
-            if video_id:
-                video_ids.append(video_id)
-        page_token = playlist_payload.get("nextPageToken")
-        if not page_token:
-            break
-
-    return _videos_from_ids(video_ids)
-
-
-def _get_channel_videos(channel_id: str) -> list[YouTubeVideo]:
-    cached = _channel_cache.get(channel_id)
-    now = time.monotonic()
-    if cached and now - cached[0] < _CHANNEL_CACHE_TTL_SECONDS:
-        return cached[1]
-    try:
-        videos = _fetch_channel_uploads(channel_id)
-    except Exception:
-        return cached[1] if cached else []
-    _channel_cache[channel_id] = (now, videos)
-    return videos
-
-
-def _search_public_videos(keywords: list[str]) -> list[YouTubeVideo]:
-    """Fallback: search public YouTube for topical reference videos."""
-    videos: list[YouTubeVideo] = []
-    for keyword in keywords[:8]:
-        try:
-            search_payload = _youtube_get(
-                "search",
-                {
-                    "part": "snippet",
-                    "q": keyword,
-                    "type": "video",
-                    "maxResults": 15,
-                    "order": "relevance",
-                    "regionCode": "JP",
-                    "relevanceLanguage": "ja",
-                },
-            )
-        except Exception:
-            continue
-
-        video_ids = [
-            item["id"]["videoId"]
-            for item in search_payload.get("items", [])
-            if "videoId" in item.get("id", {})
-        ]
-        if not video_ids:
-            continue
-        try:
-            videos.extend(_videos_from_ids(video_ids))
-        except Exception:
-            continue
-
-    return videos
+def _search_keyword(keyword: str, order: str, published_after: str | None) -> list[str]:
+    search_payload = _youtube_get(
+        "search",
+        {
+            "part": "snippet",
+            "q": keyword,
+            "type": "video",
+            "maxResults": 25,
+            "order": order,
+            "publishedAfter": published_after,
+            "regionCode": "JP",
+            "relevanceLanguage": "ja",
+        },
+    )
+    return [
+        item["id"]["videoId"]
+        for item in search_payload.get("items", [])
+        if "videoId" in item.get("id", {})
+    ]
 
 
 def collect_youtube_history(keywords: list[str] | None = None, hours: int | None = None) -> list[YouTubeVideo]:
-    """Return reference videos for scoring "youtube historical fit" and the
-    "Related YouTube History" panel.
+    """Search public YouTube for videos related to the trend keywords.
 
-    Priority order:
-    1. The configured channel's own upload history (real performance data) -
-       this is NOT time-windowed; a channel's past videos remain relevant
-       reference points regardless of how recent the current search is.
-    2. A broad public-search fallback across all provided keywords.
-    3. Bundled sample data, if nothing else is configured/available.
+    Combines a relevance-ordered search (broad topical coverage, no time
+    restriction) with a viewCount-ordered search over a generous 90-day
+    window (surfaces what's currently popular on the topic). The previous
+    implementation only did viewCount + the (often very short) trend time
+    window, which routinely returned zero results.
     """
     if not settings.youtube_api_key or not keywords:
         return _recent_only(sample_youtube, hours)
 
-    videos: list[YouTubeVideo] = []
+    published_after_90d = (datetime.now(timezone.utc) - timedelta(days=90)).isoformat().replace("+00:00", "Z")
 
-    if settings.youtube_channel_id:
-        try:
-            videos.extend(_get_channel_videos(settings.youtube_channel_id))
-        except Exception:
-            pass
+    video_ids: list[str] = []
+    seen_ids: set[str] = set()
 
-    if not videos:
-        try:
-            videos.extend(_search_public_videos(keywords))
-        except Exception:
-            pass
+    for keyword in keywords[:8]:
+        for order, published_after in (("relevance", None), ("viewCount", published_after_90d)):
+            try:
+                ids = _search_keyword(keyword, order, published_after)
+            except Exception:
+                continue
+            for video_id in ids:
+                if video_id not in seen_ids:
+                    seen_ids.add(video_id)
+                    video_ids.append(video_id)
 
-    if not videos:
+    if not video_ids:
         return _recent_only(sample_youtube, hours)
 
-    seen_ids: set[str] = set()
-    unique_videos: list[YouTubeVideo] = []
-    for video in videos:
-        if video.id and video.id not in seen_ids:
-            seen_ids.add(video.id)
-            unique_videos.append(video)
+    try:
+        videos = _videos_from_ids(video_ids)
+    except Exception:
+        return _recent_only(sample_youtube, hours)
 
-    unique_videos.sort(key=lambda v: v.views, reverse=True)
-    return unique_videos
+    videos.sort(key=lambda v: v.views, reverse=True)
+    return videos
