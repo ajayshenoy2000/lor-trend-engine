@@ -81,19 +81,59 @@ def _fallback_title(keyword: str, sources: list) -> str:
     return template.format(kw=keyword)
 
 
+def set_custom_keywords(keywords: list[str]) -> None:
+    """Set custom keywords for searching."""
+    global _custom_keywords
+    _custom_keywords = keywords if keywords else None
+
+
+def set_use_custom_keywords_only(enabled: bool) -> None:
+    """Toggle whether to use only custom keywords (ignore presaved)."""
+    global _use_custom_keywords_only
+    _use_custom_keywords_only = enabled
+
+
+def set_region_code(region_code: str) -> None:
+    """Set the search region (default JP)."""
+    global _current_region_code
+    _current_region_code = region_code
+
+
+def update_channel_baseline(channel_id: str) -> dict | None:
+    """Compute and store channel baseline. Returns baseline dict or None if failed."""
+    global _channel_baseline
+    baseline = compute_channel_baseline(channel_id)
+    _channel_baseline = baseline
+    return baseline
+
+
+def get_channel_baseline() -> dict | None:
+    """Get the current channel baseline."""
+    return _channel_baseline
+
+
 def collect_and_rank_trends(
     use_live_sources: bool = False,
     enabled_sources: list[str] | None = None,
     time_window: str = "24h",
     analysis_model_provider: str | None = None,
     brief_model_provider: str | None = None,
+    region_code: str | None = None,
+    check_for_channel_fit: bool = False,
 ) -> list[Trend]:
-    global _last_sources, _last_search_meta, _memory_trends
+    global _last_sources, _last_search_meta, _memory_trends, _current_region_code
     sources_to_use = enabled_sources or DEFAULT_SOURCES
     analysis_model = analysis_model_provider or settings.analysis_model_provider
     brief_model = brief_model_provider or settings.brief_model_provider
     hours = _hours_for_window(time_window)
-    keywords_to_use = _user_keywords or DEFAULT_KEYWORDS
+
+    # Determine keywords: custom-only, custom+presaved, or presaved only
+    if _use_custom_keywords_only:
+        keywords_to_use = _custom_keywords or []
+    else:
+        keywords_to_use = _custom_keywords or _user_keywords or DEFAULT_KEYWORDS
+
+    region_to_use = region_code or _current_region_code
 
     if not use_live_sources:
         trends = list(sample_trends)
@@ -102,13 +142,22 @@ def collect_and_rank_trends(
         keywords_to_use = expand_keywords(keywords_to_use, analysis_model)
         items = []
         if "x" in sources_to_use:
-            items.extend(collect_x_posts(keywords_to_use, hours=hours))
+            items.extend(collect_x_posts(keywords_to_use, hours=hours, region_code=region_to_use))
         if "google_news" in sources_to_use:
-            items.extend(collect_google_news(keywords_to_use, hours=hours))
+            items.extend(collect_google_news(keywords_to_use, hours=hours, region_code=region_to_use))
         if "google_trends" in sources_to_use:
-            items.extend(collect_google_trends(keywords_to_use, hours=hours))
+            items.extend(collect_google_trends(keywords_to_use, hours=hours, region_code=region_to_use))
 
-        youtube_history = collect_youtube_history(keywords=keywords_to_use, hours=hours) if "youtube" in sources_to_use else []
+        youtube_history = (
+            collect_youtube_history(
+                keywords=keywords_to_use,
+                hours=hours,
+                channel_baseline=_channel_baseline if check_for_channel_fit else None,
+                region_code=region_to_use,
+            )
+            if "youtube" in sources_to_use
+            else []
+        )
         _last_sources = items
         trends = []
         for keyword, sources in cluster_by_keyword(items).items():
@@ -210,6 +259,8 @@ def run_on_demand_search(
     time_window: str,
     analysis_model_provider: str,
     brief_model_provider: str,
+    region_code: str | None = None,
+    check_for_channel_fit: bool = False,
 ) -> dict[str, Any]:
     ranked = collect_and_rank_trends(
         use_live_sources=True,
@@ -217,6 +268,8 @@ def run_on_demand_search(
         time_window=time_window,
         analysis_model_provider=analysis_model_provider,
         brief_model_provider=brief_model_provider,
+        region_code=region_code,
+        check_for_channel_fit=check_for_channel_fit,
     )
     return {
         "trends": [trend.as_dict() for trend in ranked],
@@ -419,3 +472,15 @@ def set_keywords(keywords: list[str]) -> list[str]:
     global _user_keywords
     _user_keywords = keywords if keywords else None
     return get_keywords()
+
+
+def get_custom_keywords() -> list[str] | None:
+    return _custom_keywords
+
+
+def get_use_custom_keywords_only() -> bool:
+    return _use_custom_keywords_only
+
+
+def get_region_code() -> str:
+    return _current_region_code

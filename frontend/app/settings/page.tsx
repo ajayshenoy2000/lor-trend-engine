@@ -3,9 +3,9 @@
 import { useState } from "react";
 import { Header } from "@/components/Header";
 import { useEffect } from "react";
-import { X } from "lucide-react";
+import { X, Loader2 } from "lucide-react";
 import { API_BASE } from "@/lib/api-config";
-import { clearTrendHistory } from "@/lib/api";
+import { clearTrendHistory, updateChannelId } from "@/lib/api";
 
 interface Settings {
   keywords: string[];
@@ -29,6 +29,10 @@ export default function SettingsPage() {
   const [clearing, setClearing] = useState(false);
   const [clearMessage, setClearMessage] = useState<string | null>(null);
   const [clearError, setClearError] = useState<string | null>(null);
+  const [channelIdInput, setChannelIdInput] = useState("");
+  const [updatingChannel, setUpdatingChannel] = useState(false);
+  const [channelError, setChannelError] = useState<string | null>(null);
+  const [channelSuccess, setChannelSuccess] = useState(false);
 
   useEffect(() => {
     fetch(`${API_BASE}/api/settings`, { cache: "no-store" })
@@ -87,6 +91,29 @@ export default function SettingsPage() {
       setClearError(err instanceof Error ? err.message : "Failed to clear history");
     } finally {
       setClearing(false);
+    }
+  };
+
+  const handleUpdateChannelId = async () => {
+    if (!channelIdInput.trim()) {
+      setChannelError("Please enter a valid YouTube Channel ID");
+      return;
+    }
+    setUpdatingChannel(true);
+    setChannelError(null);
+    setChannelSuccess(false);
+    try {
+      const result = await updateChannelId(channelIdInput.trim());
+      if (result.success) {
+        setChannelSuccess(true);
+        setChannelIdInput("");
+        setSettings((prev) => prev ? { ...prev, channelId: channelIdInput.trim() } : null);
+        setTimeout(() => setChannelSuccess(false), 3000);
+      }
+    } catch (err) {
+      setChannelError(err instanceof Error ? err.message : "Failed to update channel ID");
+    } finally {
+      setUpdatingChannel(false);
     }
   };
 
@@ -153,6 +180,31 @@ export default function SettingsPage() {
           >
             {saving ? "Saving..." : "Save Keywords"}
           </button>
+        </section>
+        <section className="rounded-md border border-ink/10 bg-white p-4 shadow-soft lg:col-span-2">
+          <h2 className="mb-1 text-xl font-bold">YouTube Channel Profile</h2>
+          <p className="mb-4 text-sm text-ink/60">
+            Set your YouTube Channel ID to enable the "Check for Channel Fit" feature in Search Now. This analyzes your channel's baseline engagement to identify trends that deviate significantly from your normal performance.
+          </p>
+          <div className="flex flex-col gap-3 sm:flex-row">
+            <input
+              type="text"
+              value={channelIdInput}
+              onChange={(e) => setChannelIdInput(e.target.value)}
+              placeholder="e.g., UCdL6_NGoK0NMkB2zB46couA"
+              className="min-h-11 flex-1 rounded-md border border-ink/10 bg-mist px-3 text-sm outline-none focus:border-sage"
+            />
+            <button
+              onClick={handleUpdateChannelId}
+              disabled={updatingChannel}
+              className="flex min-h-11 items-center justify-center gap-2 rounded-md bg-sage px-4 text-sm font-bold text-white disabled:cursor-not-allowed disabled:bg-ink/25"
+            >
+              {updatingChannel ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+              {updatingChannel ? "Analyzing..." : "Update"}
+            </button>
+          </div>
+          {channelError && <p className="mt-3 text-sm text-coral">{channelError}</p>}
+          {channelSuccess && <p className="mt-3 text-sm font-bold text-sage">Channel profile updated successfully!</p>}
         </section>
         <section className="rounded-md border border-ink/10 bg-white p-4 shadow-soft lg:col-span-2">
           <h2 className="mb-1 text-xl font-bold">Clear Trend History</h2>

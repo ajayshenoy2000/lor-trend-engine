@@ -22,6 +22,17 @@ class SearchNowRequest(BaseModel):
     timeWindow: str = "24h"
     analysisModelProvider: str = "gpt"
     briefModelProvider: str = "claude"
+    regionCode: str = "JP"
+    checkForChannelFit: bool = False
+
+
+class CustomKeywordsRequest(BaseModel):
+    keywords: list[str]
+    useCustomOnly: bool = False
+
+
+class UpdateChannelIdRequest(BaseModel):
+    channelId: str
 
 
 @router.get("/health")
@@ -113,6 +124,8 @@ def search_now(payload: SearchNowRequest) -> dict:
         time_window=payload.timeWindow,
         analysis_model_provider=payload.analysisModelProvider,
         brief_model_provider=payload.briefModelProvider,
+        region_code=payload.regionCode,
+        check_for_channel_fit=payload.checkForChannelFit,
     )
 
 
@@ -179,3 +192,59 @@ def update_keywords(payload: UpdateKeywordsRequest) -> dict:
         raise HTTPException(status_code=400, detail="Keywords must be non-empty strings")
     updated = service.set_keywords(payload.keywords)
     return {"keywords": updated}
+
+
+@router.post("/custom-keywords")
+def update_custom_keywords(payload: CustomKeywordsRequest) -> dict:
+    """Set custom keywords and toggle between custom-only vs custom+presaved."""
+    if payload.keywords and not all(isinstance(k, str) and k.strip() for k in payload.keywords):
+        raise HTTPException(status_code=400, detail="Keywords must be non-empty strings")
+    service.set_custom_keywords(payload.keywords)
+    service.set_use_custom_keywords_only(payload.useCustomOnly)
+    return {"customKeywords": service.get_custom_keywords(), "useCustomOnly": service.get_use_custom_keywords_only()}
+
+
+@router.get("/custom-keywords")
+def get_custom_keywords() -> dict:
+    """Retrieve current custom keywords and toggle state."""
+    return {"customKeywords": service.get_custom_keywords(), "useCustomOnly": service.get_use_custom_keywords_only()}
+
+
+@router.post("/update-channel-id")
+def update_channel_id(payload: UpdateChannelIdRequest) -> dict:
+    """Compute and store channel baseline. Runs synchronously (blocks)."""
+    if not payload.channelId or not payload.channelId.strip():
+        raise HTTPException(status_code=400, detail="Channel ID must be non-empty")
+    try:
+        baseline = service.update_channel_baseline(payload.channelId)
+        if not baseline:
+            raise HTTPException(status_code=400, detail="Failed to fetch channel data (invalid channel or API error)")
+        return {
+            "success": True,
+            "baseline": baseline,
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Channel analysis failed: {str(e)}")
+
+
+@router.get("/channel-baseline")
+def get_channel_baseline() -> dict:
+    """Get the current channel baseline."""
+    baseline = service.get_channel_baseline()
+    if not baseline:
+        return {"baseline": None}
+    return {"baseline": baseline}
+
+
+@router.get("/region-code")
+def get_region() -> dict:
+    """Get the current search region code."""
+    return {"regionCode": service.get_region_code()}
+
+
+@router.post("/region-code")
+def set_region(data: dict) -> dict:
+    """Set the search region code."""
+    region = data.get("regionCode", "JP")
+    service.set_region_code(region)
+    return {"regionCode": service.get_region_code()}

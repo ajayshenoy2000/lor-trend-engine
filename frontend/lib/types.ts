@@ -67,7 +67,7 @@ export type Brief = {
 };
 
 export type SearchSource = "x" | "google_news" | "google_trends" | "youtube";
-export type TimeWindow = "12h" | "24h" | "3d" | "7d" | "30d";
+export type TimeWindow = "12h" | "24h" | "3d" | "7d" | "30d" | "60d" | "90d";
 export type ModelProvider = "gpt" | "claude";
 
 export type SearchNowRequest = {
@@ -75,6 +75,8 @@ export type SearchNowRequest = {
   timeWindow: TimeWindow;
   analysisModelProvider: ModelProvider;
   briefModelProvider: ModelProvider;
+  regionCode?: string;
+  checkForChannelFit?: boolean;
 };
 
 export type SearchNowResponse = {

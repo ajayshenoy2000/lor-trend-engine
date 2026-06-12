@@ -131,3 +131,53 @@ export async function clearTrendHistory(olderThanHours: number): Promise<{ delet
   }
   return (await response.json()) as { deletedCount: number };
 }
+
+export async function setCustomKeywords(keywords: string[], useCustomOnly: boolean): Promise<void> {
+  const response = await fetch(`${API_BASE}/api/custom-keywords`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ keywords, useCustomOnly })
+  });
+  if (!response.ok) {
+    const message = await response.text();
+    throw new Error(message || "Failed to set custom keywords");
+  }
+}
+
+export async function getCustomKeywords(): Promise<{ customKeywords: string[] | null; useCustomOnly: boolean }> {
+  return getJson(`/api/custom-keywords`, { customKeywords: null, useCustomOnly: false });
+}
+
+export async function updateChannelId(channelId: string): Promise<{ success: boolean; baseline: any }> {
+  const response = await fetch(`${API_BASE}/api/update-channel-id`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ channelId })
+  });
+  if (!response.ok) {
+    const message = await response.text();
+    throw new Error(message || "Channel ID update failed");
+  }
+  return (await response.json()) as { success: boolean; baseline: any };
+}
+
+export async function getChannelBaseline(): Promise<{ baseline: any }> {
+  return getJson(`/api/channel-baseline`, { baseline: null });
+}
+
+export async function getRegionCode(): Promise<{ regionCode: string }> {
+  return getJson(`/api/region-code`, { regionCode: "JP" });
+}
+
+export async function setRegionCode(regionCode: string): Promise<{ regionCode: string }> {
+  const response = await fetch(`${API_BASE}/api/region-code`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ regionCode })
+  });
+  if (!response.ok) {
+    const message = await response.text();
+    throw new Error(message || "Region update failed");
+  }
+  return (await response.json()) as { regionCode: string };
+}
