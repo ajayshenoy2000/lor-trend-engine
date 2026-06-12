@@ -84,8 +84,16 @@ export function SearchControls({ settings }: { settings: AppSettings }) {
       setProgressLog(null);
       router.refresh();
     } catch (searchError) {
-      const message = searchError instanceof Error ? searchError.message : "Search failed";
+      let message = "Search failed";
+      if (searchError instanceof Error) {
+        message = searchError.message;
+        // Extract API error from response text if available
+        if (message.includes("<!DOCTYPE")) {
+          message = "Server error - please check the backend is running";
+        }
+      }
       setError(message);
+      console.error("Search error:", searchError);
       setProgressLog(null);
     } finally {
       setIsSearching(false);

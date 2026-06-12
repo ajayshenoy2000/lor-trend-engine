@@ -40,11 +40,18 @@ export function TrendCard({ trend, rank }: { trend: Trend; rank?: number }) {
     setIsGenerating(true);
     setError(null);
     try {
-      await generateBrief(rowId);
+      const brief = await generateBrief(rowId);
+      if (!brief || !brief.id) {
+        throw new Error("Brief was not created properly");
+      }
+      // Wait a moment for database to be consistent
+      await new Promise(resolve => setTimeout(resolve, 500));
       router.push(`/briefs/${briefId}`);
       router.refresh();
     } catch (genError) {
-      setError(genError instanceof Error ? genError.message : "Brief generation failed");
+      const errorMessage = genError instanceof Error ? genError.message : "Failed to create brief";
+      setError(errorMessage);
+      console.error("Brief generation error:", genError);
     } finally {
       setIsGenerating(false);
     }

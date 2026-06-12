@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 interface TooltipProps {
   children: React.ReactNode;
@@ -10,6 +10,16 @@ interface TooltipProps {
 
 export function Tooltip({ children, content, side = "top" }: TooltipProps) {
   const [isOpen, setIsOpen] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+    checkMobile();
+    window.addEventListener("resize", checkMobile);
+    return () => window.removeEventListener("resize", checkMobile);
+  }, []);
 
   const positionClasses = {
     top: "bottom-full mb-2 left-1/2 -translate-x-1/2",
@@ -25,13 +35,22 @@ export function Tooltip({ children, content, side = "top" }: TooltipProps) {
     right: "right-full top-1/2 -translate-y-1/2 border-r-ink/80 border-t-transparent border-b-transparent",
   };
 
+  const handleMouseEnter = () => !isMobile && setIsOpen(true);
+  const handleMouseLeave = () => !isMobile && setIsOpen(false);
+  const handleTap = (e: React.TouchEvent | React.MouseEvent) => {
+    if (isMobile) {
+      e.stopPropagation();
+      setIsOpen(!isOpen);
+    }
+  };
+
   return (
     <div className="relative inline-block">
       <div
-        onMouseEnter={() => setIsOpen(true)}
-        onMouseLeave={() => setIsOpen(false)}
-        onTouchStart={() => setIsOpen(true)}
-        onTouchEnd={() => setIsOpen(false)}
+        onMouseEnter={handleMouseEnter}
+        onMouseLeave={handleMouseLeave}
+        onClick={handleTap}
+        onTouchStart={handleTap}
       >
         {children}
       </div>

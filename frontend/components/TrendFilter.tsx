@@ -5,6 +5,16 @@ import { X, Search } from "lucide-react";
 import { TrendCard } from "./TrendCard";
 import type { Trend } from "@/lib/types";
 
+const IMPORTANT_KEYWORDS = [
+  "クマ取り",
+  "美容医療",
+  "ボトックス",
+  "ヒアルロン酸",
+  "ダイエット",
+  "涙袋",
+  "埋没",
+];
+
 export function TrendFilter({ trends, showRank = true }: { trends: Trend[]; showRank?: boolean }) {
   const [filterText, setFilterText] = useState("");
 
@@ -22,6 +32,22 @@ export function TrendFilter({ trends, showRank = true }: { trends: Trend[]; show
 
   return (
     <>
+      <div className="mb-4 flex flex-wrap gap-2">
+        {IMPORTANT_KEYWORDS.map((keyword) => (
+          <button
+            key={keyword}
+            onClick={() => setFilterText(keyword)}
+            className={`rounded-md px-3 py-1.5 text-xs font-bold transition ${
+              filterText === keyword
+                ? "bg-sage text-white"
+                : "border border-ink/20 bg-mist text-ink/70 hover:border-sage"
+            }`}
+          >
+            {keyword}
+          </button>
+        ))}
+      </div>
+
       <div className="mb-4 flex flex-col gap-2">
         <div className="relative">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink/40" />

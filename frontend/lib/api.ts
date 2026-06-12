@@ -6,9 +6,14 @@ export const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhos
 async function getJson<T>(path: string, fallback: T): Promise<T> {
   try {
     const response = await fetch(`${API_BASE}${path}`, { cache: "no-store" });
-    if (!response.ok) return fallback;
-    return (await response.json()) as T;
-  } catch {
+    if (!response.ok) {
+      console.warn(`API request failed: ${path} (${response.status})`);
+      return fallback;
+    }
+    const data = await response.json();
+    return data as T;
+  } catch (error) {
+    console.warn(`API request error: ${path}`, error);
     return fallback;
   }
 }
@@ -104,18 +109,22 @@ export async function generateBrief(rowId: string): Promise<Brief> {
 }
 
 export async function deleteTrend(rowId: string): Promise<void> {
+  if (!rowId) throw new Error("Trend ID is required");
   const response = await fetch(`${API_BASE}/api/trends/${rowId}`, { method: "DELETE" });
   if (!response.ok) {
     const message = await response.text();
-    throw new Error(message || "Delete failed");
+    console.error("Delete trend error:", message);
+    throw new Error(message || "Failed to delete trend");
   }
 }
 
 export async function deleteBrief(briefId: string): Promise<void> {
+  if (!briefId) throw new Error("Brief ID is required");
   const response = await fetch(`${API_BASE}/api/briefs/${briefId}`, { method: "DELETE" });
   if (!response.ok) {
     const message = await response.text();
-    throw new Error(message || "Delete failed");
+    console.error("Delete brief error:", message);
+    throw new Error(message || "Failed to delete brief");
   }
 }
 

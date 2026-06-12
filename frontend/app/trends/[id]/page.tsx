@@ -4,6 +4,7 @@ import { CreateBriefButton } from "@/components/CreateBriefButton";
 import { Header } from "@/components/Header";
 import { ScoreBreakdown } from "@/components/ScoreBreakdown";
 import { SourceList } from "@/components/SourceList";
+import { Tooltip } from "@/components/Tooltip";
 import { getTrend } from "@/lib/api";
 
 export default async function TrendDetailPage({ params }: { params: { id: string } }) {
@@ -16,18 +17,26 @@ export default async function TrendDetailPage({ params }: { params: { id: string
       <div className="mb-6 rounded-md border border-ink/10 bg-white p-5 shadow-soft">
         <div className="mb-4 flex items-end justify-between gap-4">
           <div className="flex-1">
-            <h1 className="text-3xl font-bold leading-tight text-ink">{trend.title}</h1>
-            <p className="mt-2 text-sm text-ink/60">{trend.keyword}</p>
+            <Tooltip content="The primary trend topic - what this trend is about">
+              <h1 className="cursor-help text-3xl font-bold leading-tight text-ink border-b border-dotted border-ink/20">{trend.title}</h1>
+            </Tooltip>
+            <Tooltip content="The search keyword associated with this trend">
+              <p className="mt-2 text-sm text-ink/60 cursor-help border-b border-dotted border-ink/20 inline-block">{trend.keyword}</p>
+            </Tooltip>
           </div>
-          <div className="shrink-0 rounded-md bg-sage/10 px-4 py-3 text-center">
-            <div className="flex items-center gap-1 text-2xl font-bold text-sage">
-              <TrendingUp className="h-6 w-6" />
-              {Math.round(trend.score.total)}
+          <Tooltip content="Overall trend score (0-100) based on all metrics">
+            <div className="shrink-0 rounded-md bg-sage/10 px-4 py-3 text-center cursor-help">
+              <div className="flex items-center gap-1 text-2xl font-bold text-sage">
+                <TrendingUp className="h-6 w-6" />
+                {Math.round(trend.score.total)}
+              </div>
+              <div className="text-xs font-bold uppercase text-sage">Score</div>
             </div>
-            <div className="text-xs font-bold uppercase text-sage">Score</div>
-          </div>
+          </Tooltip>
         </div>
-        <p className="mb-4 text-base leading-6 text-ink/75">{trend.summary}</p>
+        <Tooltip content="Summary of why this trend is gaining momentum and what makes it relevant">
+          <p className="mb-4 text-base leading-6 text-ink/75 cursor-help border-b border-dotted border-ink/20 pb-2">{trend.summary}</p>
+        </Tooltip>
         <div className="flex flex-wrap gap-2">
           {trend.clusterTerms.map((term) => (
             <span key={term} className="rounded-md border border-sage/30 bg-sage/5 px-2.5 py-1 text-xs font-semibold text-sage/80">

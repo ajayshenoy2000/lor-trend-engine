@@ -356,6 +356,9 @@ def get_brief(brief_id: str) -> VideoBrief | None:
 def generate_brief_for_trend(row_id: str) -> VideoBrief | None:
     """Generate (or return the existing) brief for a trend row. Briefs are
     only created when this is called explicitly — never automatically."""
+    import logging
+    logger = logging.getLogger(__name__)
+
     brief_id = f"brief-{row_id}"
     client = get_client()
 
@@ -368,34 +371,51 @@ def generate_brief_for_trend(row_id: str) -> VideoBrief | None:
 
     trend = get_trend(row_id)
     if not trend:
+        logger.error(f"Trend not found for row_id: {row_id}")
         return None
 
-    brief = generate_riki_style_brief(trend, provider=_brief_provider())
-    brief.id = brief_id
-    brief.trend_id = trend.id
+    try:
+        brief = generate_riki_style_brief(trend, provider=_brief_provider())
+        brief.id = brief_id
+        brief.trend_id = trend.id
+    except Exception as e:
+        logger.error(f"Failed to generate brief content for {row_id}: {e}")
+        raise Exception(f"Brief generation failed: {str(e)}")
 
     if client:
         try:
+            # Insert brief
+            brief_payload = brief.as_dict()
             result = client.table("briefs").insert(
                 {
                     "id": brief_id,
                     "trend_row_id": row_id,
                     "trend_id": trend.id,
-                    "payload": brief.as_dict(),
+                    "payload": brief_payload,
                 }
             ).execute()
             if not result.data:
                 raise Exception("Brief insert returned no data")
-            # Also update the trend's has_brief flag
-            trend.has_brief = True
-            client.table("trends").update({"payload": trend.as_dict()}).eq("row_id", row_id).execute()
+            logger.info(f"Brief saved successfully: {brief_id}")
+
+            # Update trend's has_brief flag
+            try:
+                trend.has_brief = True
+                update_result = client.table("trends").update({"payload": trend.as_dict()}).eq("row_id", row_id).execute()
+                if not update_result.data:
+                    logger.warning(f"Trend has_brief flag update returned no data for {row_id}")
+                else:
+                    logger.info(f"Trend has_brief flag updated for {row_id}")
+            except Exception as e:
+                logger.error(f"Failed to update trend has_brief flag for {row_id}: {e}")
+                # Don't raise - brief was saved successfully
         except Exception as e:
-            import logging
-            logger = logging.getLogger(__name__)
             logger.error(f"Failed to save brief {brief_id}: {e}")
-            raise
+            raise Exception(f"Failed to save brief to database: {str(e)}")
     else:
         _briefs[brief_id] = brief
+        logger.info(f"Brief saved to memory: {brief_id}")
+
     return brief
 
 

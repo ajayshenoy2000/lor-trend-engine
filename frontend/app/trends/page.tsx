@@ -7,7 +7,10 @@ export default async function TrendHistoryPage() {
 
   return (
     <div>
-      <Header title="Trend History" subtitle="Trends from previous searches. The most recent search results live on the Home tab." />
+      <Header
+        title="Trend History"
+        subtitle="Archive of trends from previous searches. Use the filter to find specific keywords. The most recent results are always on the Home tab."
+      />
       {trends.length ? (
         <TrendFilter trends={trends} />
       ) : (
