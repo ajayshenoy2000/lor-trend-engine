@@ -1,10 +1,15 @@
 import type { Brief, SourceItem, Trend } from "./types";
 
+const now = new Date();
+const oneHoursAgo = new Date(now.getTime() - 1 * 60 * 60 * 1000);
+const sixHoursAgo = new Date(now.getTime() - 6 * 60 * 60 * 1000);
+const oneDayAgo = new Date(now.getTime() - 1 * 24 * 60 * 60 * 1000);
+
 export const sampleTrends: Trend[] = [
   {
     id: "glp1-mounjaro-safety",
     rowId: "glp1-mounjaro-safety",
-    createdAt: null,
+    createdAt: oneHoursAgo.toISOString(),
     hasBrief: true,
     title: "SNSで話題のマンジャロダイエット、実際どうなの？",
     keyword: "マンジャロ",
@@ -20,7 +25,7 @@ export const sampleTrends: Trend[] = [
   {
     id: "kuma-downtime-anxiety",
     rowId: "kuma-downtime-anxiety",
-    createdAt: null,
+    createdAt: sixHoursAgo.toISOString(),
     hasBrief: false,
     title: "クマ取り後のダウンタイム、不安になりすぎなくて大丈夫？",
     keyword: "クマ取り",
@@ -36,7 +41,7 @@ export const sampleTrends: Trend[] = [
   {
     id: "tear-bag-filler-natural",
     rowId: "tear-bag-filler-natural",
-    createdAt: null,
+    createdAt: oneDayAgo.toISOString(),
     hasBrief: false,
     title: "SNSで人気の涙袋ヒアルロン酸、自然に見せるには？",
     keyword: "涙袋",

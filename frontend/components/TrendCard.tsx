@@ -10,15 +10,19 @@ import type { Trend } from "@/lib/types";
 
 function getAgeLabel(createdAt: string | null | undefined): string {
   if (!createdAt) return "";
-  const date = new Date(createdAt);
-  const now = new Date();
-  const diff = now.getTime() - date.getTime();
-  const hours = Math.floor(diff / (1000 * 60 * 60));
-  const days = Math.floor(hours / 24);
+  try {
+    const date = new Date(createdAt);
+    const now = new Date();
+    const diff = now.getTime() - date.getTime();
+    const hours = Math.floor(diff / (1000 * 60 * 60));
+    const days = Math.floor(hours / 24);
 
-  if (days > 0) return `${days}d ago`;
-  if (hours > 0) return `${hours}h ago`;
-  return "Just now";
+    if (days > 0) return `${days}d ago`;
+    if (hours > 0) return `${hours}h ago`;
+    return "Just now";
+  } catch {
+    return "";
+  }
 }
 
 export function TrendCard({ trend, rank }: { trend: Trend; rank?: number }) {
@@ -136,12 +140,12 @@ export function TrendCard({ trend, rank }: { trend: Trend; rank?: number }) {
           </span>
         </Tooltip>
         <div className="flex items-center gap-2">
-          {trend.createdAt && (
+          {trend.createdAt ? (
             <span className="flex items-center gap-1 text-xs text-ink/50">
               <Clock className="h-3 w-3" />
               {getAgeLabel(trend.createdAt)}
             </span>
-          )}
+          ) : null}
           <ArrowRight className="h-4 w-4" />
         </div>
       </div>
