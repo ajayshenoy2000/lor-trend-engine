@@ -108,34 +108,7 @@ export function SearchControls({ settings }: { settings: AppSettings }) {
 
   return (
     <section className="rounded-md border border-ink/10 bg-white p-4 shadow-soft lg:col-span-2">
-      <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
-        <div>
-          <p className="text-xs font-bold uppercase text-coral">On-demand collection</p>
-          <h2 className="text-xl font-bold">Search Now</h2>
-          <p className="mt-1 text-sm leading-6 text-ink/60">Fetch only when you press the button. No weekly scheduler is required.</p>
-        </div>
-        <div className="flex gap-2">
-          <button
-            className="flex min-h-12 items-center justify-center gap-2 rounded-md bg-coral px-5 text-sm font-bold text-white disabled:cursor-not-allowed disabled:bg-ink/25"
-            disabled={disabled}
-            onClick={handleSearch}
-            type="button"
-          >
-            {isSearching ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
-            {isSearching ? "Searching" : "Search Now"}
-          </button>
-          {isSearching && (
-            <button
-              className="flex min-h-12 items-center justify-center gap-2 rounded-md border border-coral/30 px-4 text-sm font-bold text-coral hover:bg-coral/10"
-              onClick={handleStop}
-              type="button"
-            >
-              <Square className="h-4 w-4" />
-              Stop
-            </button>
-          )}
-        </div>
-      </div>
+      <h2 className="mb-4 text-xl font-bold">Search Now</h2>
 
       {progressLog && (
         <div className="mb-4 rounded-md border border-sage/25 bg-sage/5 p-3 text-sm font-semibold text-sage">
@@ -246,6 +219,28 @@ export function SearchControls({ settings }: { settings: AppSettings }) {
             <span className="text-sm font-bold text-ink">Check for Channel Fit</span>
           </label>
         </div>
+      </div>
+
+      <div className="mt-4 flex gap-2">
+        <button
+          className="flex min-h-12 flex-1 items-center justify-center gap-2 rounded-md bg-coral px-5 text-sm font-bold text-white disabled:cursor-not-allowed disabled:bg-ink/25"
+          disabled={disabled}
+          onClick={handleSearch}
+          type="button"
+        >
+          {isSearching ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
+          {isSearching ? "Searching" : "Search Now"}
+        </button>
+        {isSearching && (
+          <button
+            className="flex min-h-12 items-center justify-center gap-2 rounded-md border border-coral/30 px-4 text-sm font-bold text-coral hover:bg-coral/10"
+            onClick={handleStop}
+            type="button"
+          >
+            <Square className="h-4 w-4" />
+            Stop
+          </button>
+        )}
       </div>
 
       <div className="mt-4 rounded-md bg-mist p-3 text-sm leading-6 text-ink/65">
