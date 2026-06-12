@@ -74,6 +74,10 @@ a:active {
   }
 }
 
+.fadeIn {
+  animation: fadeIn 0.2s ease;
+}
+
 .page-enter {
   animation: fadeInUp 0.35s ease both;
 }

@@ -3,9 +3,23 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowRight, CheckCircle2, FileText, Loader2, ShieldAlert, Trash2 } from "lucide-react";
+import { ArrowRight, CheckCircle2, FileText, Loader2, ShieldAlert, Trash2, Clock } from "lucide-react";
+import { Tooltip } from "./Tooltip";
 import { deleteTrend, generateBrief } from "@/lib/api";
 import type { Trend } from "@/lib/types";
+
+function getAgeLabel(createdAt: string | null | undefined): string {
+  if (!createdAt) return "";
+  const date = new Date(createdAt);
+  const now = new Date();
+  const diff = now.getTime() - date.getTime();
+  const hours = Math.floor(diff / (1000 * 60 * 60));
+  const days = Math.floor(hours / 24);
+
+  if (days > 0) return `${days}d ago`;
+  if (hours > 0) return `${hours}h ago`;
+  return "Just now";
+}
 
 export function TrendCard({ trend, rank }: { trend: Trend; rank?: number }) {
   const router = useRouter();
@@ -109,11 +123,27 @@ export function TrendCard({ trend, rank }: { trend: Trend; rank?: number }) {
       {error ? <p className="mb-2 text-xs font-semibold text-coral">{error}</p> : null}
 
       <div className="flex items-center justify-between text-sm font-semibold text-sage">
-        <span className="flex items-center gap-2">
-          {trend.safetyNotes.length ? <ShieldAlert className="h-4 w-4" /> : <CheckCircle2 className="h-4 w-4" />}
-          {trend.safetyNotes.length ? "Risk-aware angle" : "Ready angle"}
-        </span>
-        <ArrowRight className="h-4 w-4" />
+        <Tooltip
+          content={
+            trend.safetyNotes.length
+              ? "This trend has safety considerations — review before publishing"
+              : "This trend is ready to pursue with no major safety flags"
+          }
+        >
+          <span className="flex cursor-help items-center gap-2">
+            {trend.safetyNotes.length ? <ShieldAlert className="h-4 w-4" /> : <CheckCircle2 className="h-4 w-4" />}
+            {trend.safetyNotes.length ? "Risk-aware angle" : "Ready angle"}
+          </span>
+        </Tooltip>
+        <div className="flex items-center gap-2">
+          {trend.createdAt && (
+            <span className="flex items-center gap-1 text-xs text-ink/50">
+              <Clock className="h-3 w-3" />
+              {getAgeLabel(trend.createdAt)}
+            </span>
+          )}
+          <ArrowRight className="h-4 w-4" />
+        </div>
       </div>
     </Link>
   );

@@ -2,6 +2,7 @@ import { Activity, CalendarCheck, Film, TrendingUp } from "lucide-react";
 import { Header } from "@/components/Header";
 import { SearchControls } from "@/components/SearchControls";
 import { TrendCard } from "@/components/TrendCard";
+import { TrendFilter } from "@/components/TrendFilter";
 import { getRecordThisWeek, getSettings, getTopTrends } from "@/lib/api";
 
 export default async function HomePage() {
@@ -34,15 +35,8 @@ export default async function HomePage() {
 
       <div className="grid gap-6 lg:grid-cols-[1.15fr_0.85fr]">
         <section>
-          <div className="mb-3 flex items-center justify-between">
-            <h2 className="text-xl font-bold">Today&apos;s Top Trends</h2>
-            <span className="text-sm font-semibold text-ink/50">Top 20</span>
-          </div>
-          <div className="stagger-list space-y-3">
-            {trends.map((trend, index) => (
-              <TrendCard key={trend.id} trend={trend} rank={index + 1} />
-            ))}
-          </div>
+          <h2 className="mb-3 text-xl font-bold">Today&apos;s Top Trends</h2>
+          <TrendFilter trends={trends} />
         </section>
 
         <section>
